@@ -1,0 +1,87 @@
+import cvxpy as cp
+import numpy as np
+import matplotlib.pyplot as plt
+
+np.random.seed(1)
+n = 50 #students
+m=3  #subjects
+
+original_scores = np.random.normal(loc=75, scale=10, size=(n, m)) #generating scores using normal distribution
+original_scores = np.clip(original_scores, 0, 100) 
+
+x= cp.Variable((n, m)) #solution vector (optimized scores)
+cost= cp.sum_squares(x - original_scores) #cost function  
+
+constraints = [
+    #each subject constraints
+    x[:,0]>=60, 
+    x[:,1]>=20,
+    x[:,2]>=45,
+    cp.std(original_scores) - cp.std(x) >= 1,   
+]
+
+prob= cp.Problem(cp.Minimize(cost), constraints)
+prob.solve()
+
+optimized_scores = x.value
+
+print("original mean: ", np.mean(original_scores))
+print("original std: ", np.std(original_scores))
+print("optimized mean: ", np.mean(optimized_scores))
+print("optimized value ", prob.value)
+print("optimized std: ", np.std(optimized_scores))
+
+print("Problem.is_dcp():", prob.is_dcp())
+
+H = 2 * np.eye(n * m) #The hessian matrix for our problem
+eigenvalues = np.linalg.eigvals(H)
+if np.all(eigenvalues >= 0):
+    print("The distribution is convex.")
+else:
+    print("The distribution is not convex.")
+    
+
+#modifying convexity using non linear transformation
+
+non_convex_scores = optimized_scores +  0.05 * (optimized_scores - 75)**3
+
+
+#restoring convexity by adding constraints
+
+restored_scores = non_convex_scores.copy()
+
+restored_scores = np.clip(restored_scores, 50, 95)
+restored_scores[:,0] = np.clip(restored_scores[:,0], 60, 95)  # Subject 1
+restored_scores[:,1] = np.clip(restored_scores[:,1], 20, 90)  # Subject 2
+restored_scores[:,2] = np.clip(restored_scores[:,2], 45, 95)  #Subject 3
+
+print("Original Convex:")
+print("Mean:", np.mean(original_scores))
+print("Standard Deviation:", np.std(original_scores))
+print("------------------------------")
+print("Modified Convex:")
+print("Mean:", np.mean(non_convex_scores))
+print("Standard Deviation:", np.std(non_convex_scores))
+print("------------------------------")
+print("Restored Convex:")
+print("Mean:", np.mean(restored_scores))
+print("Standard Deviation:", np.std(restored_scores))
+
+# plot 
+fig = plt.figure(figsize=(18, 5))
+
+for i, (scores, title) in enumerate(zip(
+    [original_scores, non_convex_scores, restored_scores],
+    ["Original (Convex)", "Modified (Non-Convex)", "Restored (Convex)"]
+)):
+    ax = fig.add_subplot(1, 3, i+1, projection='3d')
+    ax.scatter(scores[:,0], scores[:,1], scores[:,2], c='blue', s=50)
+    ax.set_xlabel('Subject 1')
+    ax.set_ylabel('Subject 2')
+    ax.set_zlabel('Subject 3')
+    ax.set_title(title)
+    ax.set_xlim(0, 100)
+    ax.set_ylim(0, 100)
+    ax.set_zlim(0, 100)
+
+plt.show()
